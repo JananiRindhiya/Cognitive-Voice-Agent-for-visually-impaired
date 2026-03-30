@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice Cognitive Agent — Assistive AI</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0d; --surface: #1a1a1a; --surface2: #262626;
+    --border: #444; --accent: #00e5a0; --text: #ffffff;
+    --muted: #aaaaaa; --danger: #ff6b6b; --warn: #ffcc00;
+    --focus: #ffcc00;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-size: 20px; line-height: 1.7; min-height: 100vh;
+  }
+  .skip-link {
+    position: absolute; top: -100px; left: 0;
+    background: var(--focus); color: #000;
+    padding: 12px 20px; font-size: 18px; font-weight: 700;
+    z-index: 9999; transition: top 0.2s;
+  }
+  .skip-link:focus { top: 0; }
+  *:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
+  .live-region { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .container { max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem; display: flex; flex-direction: column; min-height: 100vh; gap: 1.5rem; }
+  header { text-align: center; padding-bottom: 1.5rem; border-bottom: 2px solid var(--border); }
+  .app-title { font-size: 2rem; font-weight: 700; color: var(--accent); margin-bottom: 0.25rem; }
+  .app-subtitle { font-size: 1rem; color: var(--muted); }
+  .status-bar {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 0.75rem 1.25rem;
+    background: var(--surface); border: 2px solid var(--border); border-radius: 12px; font-size: 1rem;
+  }
+  .status-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); animation: pulse 2s ease-in-out infinite; flex-shrink: 0; }
+  .status-dot.listening { background: var(--danger); }
+  .status-dot.processing { background: var(--warn); }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.85)} }
+  .mic-section { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+  .mic-btn {
+    width: 180px; height: 180px; border-radius: 50%;
+    background: var(--surface); border: 4px solid var(--accent);
+    color: var(--accent); cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
+    transition: all 0.2s; font-family: 'Atkinson Hyperlegible', sans-serif;
+    font-size: 1rem; font-weight: 700;
+  }
+  .mic-btn:hover, .mic-btn:focus-visible { background: var(--surface2); transform: scale(1.05); border-color: #fff; }
+  .mic-btn.listening { background: var(--danger); border-color: var(--danger); color: #fff; animation: micPulse 1s ease-in-out infinite; }
+  @keyframes micPulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,107,107,0.5)} 50%{box-shadow:0 0 0 28px rgba(255,107,107,0)} }
+  .mic-btn svg { width: 64px; height: 64px; }
+  .mic-hint { font-size: 1rem; color: var(--muted); text-align: center; max-width: 340px; }
+  .voice-status { font-size: 1.2rem; font-weight: 700; text-align: center; min-height: 2rem; color: var(--muted); padding: 0.5rem; border-radius: 8px; }
+  .voice-status.listening { color: var(--danger); }
+  .voice-status.processing { color: var(--warn); }
+  .voice-status.success { color: var(--accent); }
+  .voice-status.error { color: var(--danger); }
+  .section-label { font-size: 0.9rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .response-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .response-box {
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: 14px; padding: 1.5rem; min-height: 120px;
+    font-size: 1.2rem; line-height: 1.8; position: relative;
+  }
+  .response-box.has-response { border-color: var(--accent); }
+  .response-label { position: absolute; top: -13px; left: 16px; background: var(--bg); padding: 0 8px; font-size: 0.8rem; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+  .response-empty { color: var(--muted); font-style: italic; }
+  .intent-badge { display: none; align-items: center; gap: 6px; margin-top: 10px; padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: 700; background: rgba(0,229,160,0.12); border: 1px solid rgba(0,229,160,0.3); color: var(--accent); }
+  .tts-section { background: var(--surface); border: 2px solid var(--border); border-radius: 14px; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; }
+  .tts-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+  .tts-label { font-size: 1rem; font-weight: 700; }
+  .toggle-group { display: flex; border: 2px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .toggle-btn { padding: 8px 20px; background: var(--surface2); border: none; color: var(--muted); font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .toggle-btn.active { background: var(--accent); color: #000; }
+  .speed-control { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .speed-control label { font-size: 1rem; font-weight: 700; }
+  input[type=range] { width: 160px; accent-color: var(--accent); cursor: pointer; height: 6px; }
+  .speed-display { font-size: 1rem; font-weight: 700; color: var(--accent); min-width: 40px; }
+  .replay-btn { padding: 8px 20px; background: var(--surface2); border: 2px solid var(--border); border-radius: 10px; color: var(--text); font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: all 0.15s; }
+  .replay-btn:hover, .replay-btn:focus-visible { border-color: var(--accent); color: var(--accent); }
+  .text-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .input-row { display: flex; gap: 10px; }
+  #textInput { flex: 1; background: var(--surface2); border: 2px solid var(--border); border-radius: 12px; padding: 1rem 1.25rem; color: var(--text); font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1.1rem; outline: none; transition: border-color 0.2s; }
+  #textInput:focus { border-color: var(--focus); }
+  #textInput::placeholder { color: var(--muted); }
+  .send-btn { padding: 1rem 1.5rem; background: var(--accent); border: none; border-radius: 12px; color: #000; font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+  .send-btn:hover, .send-btn:focus-visible { background: #fff; transform: scale(1.03); }
+  .commands-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .commands-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+  .cmd-btn { padding: 1rem 1.25rem; background: var(--surface); border: 2px solid var(--border); border-radius: 12px; color: var(--text); font-family: 'Atkinson Hyperlegible', sans-serif; font-size: 1rem; font-weight: 700; cursor: pointer; text-align: left; transition: all 0.15s; display: flex; align-items: center; gap: 10px; }
+  .cmd-btn:hover, .cmd-btn:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--surface2); }
+  .cmd-btn svg { width: 20px; height: 20px; flex-shrink: 0; fill: currentColor; }
+  .history-section { display: flex; flex-direction: column; gap: 0.75rem; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+  .history-item { padding: 0.75rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; cursor: pointer; transition: border-color 0.15s; display: flex; flex-direction: column; gap: 3px; }
+  .history-item:hover, .history-item:focus-visible { border-color: var(--accent); }
+  .history-q { font-size: 0.9rem; font-weight: 700; color: var(--muted); }
+  .history-a { font-size: 1rem; color: var(--text); }
+  footer { margin-top: auto; padding-top: 1.5rem; border-top: 2px solid var(--border); display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; color: var(--muted); flex-wrap: wrap; gap: 8px; }
+  .kbd { display: inline-block; padding: 2px 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; font-size: 0.8rem; color: var(--muted); }
+  .divider { border: none; border-top: 2px solid var(--border); margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+<a href="#main" class="skip-link">Skip to main content</a>
+<div class="live-region" aria-live="assertive" aria-atomic="true" id="srAnnounce"></div>
+<div class="live-region" aria-live="polite" id="srPolite"></div>
+
+<div class="container" id="main">
+  <header role="banner">
+    <div class="app-title">Voice Cognitive Agent</div>
+    <div class="app-subtitle">Assistive AI — Visually Impaired Support System</div>
+  </header>
+
+  <div class="status-bar" role="status" aria-live="polite">
+    <div class="status-dot" id="statusDot" aria-hidden="true"></div>
+    <span id="statusText" style="font-size:1rem;font-weight:700;">System Ready — Speak or type your command</span>
+  </div>
+
+  <section class="mic-section" aria-label="Voice Input">
+    <button class="mic-btn" id="micBtn" onclick="toggleMic()"
+            aria-label="Start voice input" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+      </svg>
+      <span id="micLabel">Tap to Speak</span>
+    </button>
+    <div class="voice-status" id="voiceStatus" role="status" aria-live="polite">
+      Press <kbd class="kbd">Space</kbd> or tap mic to speak
+    </div>
+    <p class="mic-hint" aria-hidden="true">Your voice will be transcribed and responded to automatically</p>
+  </section>
+
+  <section class="response-section" aria-label="Agent Response">
+    <div class="section-label">Agent Response</div>
+    <div class="response-box" id="responseBox" role="region" aria-label="Latest response" tabindex="0">
+      <div class="response-label" aria-hidden="true">Response</div>
+      <div id="responseText"><span class="response-empty">Your response will appear here and be spoken aloud...</span></div>
+      <div id="intentBadge" class="intent-badge"><span id="intentText"></span></div>
+    </div>
+    <div id="cameraPreview" style="display:none;">
+      <div class="section-label" style="margin-bottom:8px;">Camera Snapshot</div>
+      <img id="webcamImg" src="" alt="Webcam capture showing what the laptop camera sees"
+           style="width:100%;border-radius:12px;border:2px solid var(--accent);max-height:320px;object-fit:cover;" />
+    </div>
+    <div class="tts-section" role="group" aria-label="Voice output controls">
+      <div class="tts-row">
+        <span class="tts-label">🔊 Voice Output</span>
+        <div class="toggle-group" role="group">
+          <button class="toggle-btn active" id="ttsOn" onclick="setTTS(true)" aria-pressed="true">ON</button>
+          <button class="toggle-btn" id="ttsOff" onclick="setTTS(false)" aria-pressed="false">OFF</button>
+        </div>
+        <button class="replay-btn" onclick="replayLast()" aria-label="Replay last response">↺ Replay</button>
+      </div>
+      <div class="speed-control" role="group" aria-label="Speech speed">
+        <label for="speedSlider">Speed:</label>
+        <input type="range" id="speedSlider" min="0.5" max="2" step="0.1" value="0.9"
+               aria-label="Speech rate" oninput="updateSpeed(this.value)">
+        <span class="speed-display" id="speedDisplay" aria-live="polite">0.9x</span>
+      </div>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section class="text-section" aria-label="Text Input">
+    <div class="section-label">Or Type Your Command</div>
+    <div class="input-row">
+      <input type="text" id="textInput"
+             placeholder="e.g. what time is it, help, who are you..."
+             aria-label="Type your command and press Enter or Send"
+             autocomplete="off" />
+      <button class="send-btn" onclick="sendText()" aria-label="Send message">Send ↵</button>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section class="commands-section" aria-label="Quick Commands">
+    <div class="section-label">Quick Commands — Click or say these</div>
+    <div class="commands-grid">
+      <button class="cmd-btn" onclick="sendCommand('help')" aria-label="Get help">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+        Help
+      </button>
+      <button class="cmd-btn" onclick="sendCommand('what time is it')" aria-label="Current time">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67V7z"/></svg>
+        What time is it?
+      </button>
+      <button class="cmd-btn" onclick="sendCommand('what is today date')" aria-label="Today's date">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.11 0-1.99.9-1.99 2L3 19c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zM7 10h5v5H7z"/></svg>
+        Today's date?
+      </button>
+      <button class="cmd-btn" onclick="sendCommand('who are you')" aria-label="About the agent">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+        Who are you?
+      </button>
+      <button class="cmd-btn" onclick="sendCommand('read this')" aria-label="Read screen text">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 5c-1.11-.35-2.33-.5-3.5-.5-1.95 0-4.05.4-5.5 1.5-1.45-1.1-3.55-1.5-5.5-1.5S2.45 4.9 1 6v14.65c0 .25.25.5.5.5.1 0 .15-.05.25-.05C3.1 20.45 5.05 20 6.5 20c1.95 0 4.05.4 5.5 1.5 1.35-.85 3.8-1.5 5.5-1.5 1.65 0 3.35.3 4.75 1.05.1.05.15.05.25.05.25 0 .5-.25.5-.5V6c-.6-.45-1.25-.75-2-1zm0 13.5c-1.1-.35-2.3-.5-3.5-.5-1.7 0-4.15.65-5.5 1.5V8c1.35-.85 3.8-1.5 5.5-1.5 1.2 0 2.4.15 3.5.5v11.5z"/></svg>
+        Read screen
+      </button>
+      <button class="cmd-btn" onclick="sendCommand('identify object')" aria-label="Identify object via camera">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 6.5v3h-3v-3h3M11 5H5v6h6V5zm-1.5 9.5v3h-3v-3h3M11 13H5v6h6v-6zm6.5-6.5v3h-3v-3h3M19 5h-6v6h6V5z"/></svg>
+        Identify object
+      </button>
+    </div>
+  </section>
+
+  <hr class="divider">
+
+  <section class="history-section" aria-label="Conversation History">
+    <div class="section-label">Conversation History — Click to replay</div>
+    <div class="history-list" id="historyList" role="log" aria-live="polite">
+      <p style="color:var(--muted);font-size:0.95rem;">No history yet. Start speaking or typing.</p>
+    </div>
+  </section>
+
+  <footer role="contentinfo">
+    <span>Shortcuts: <kbd class="kbd">Space</kbd> = mic &nbsp; <kbd class="kbd">Enter</kbd> = send</span>
+    <span id="msgCount" aria-live="polite">0 messages</span>
+  </footer>
+</div>
+
+<script>
+  let ttsEnabled = true, ttsRate = 0.9, isListening = false;
+  let recognition = null, lastResponse = '', msgCount = 0, history = [];
+
+  function announce(text, priority='polite') {
+    const el = document.getElementById(priority==='assertive' ? 'srAnnounce' : 'srPolite');
+    el.textContent = ''; setTimeout(() => el.textContent = text, 50);
+  }
+
+  function setStatus(text, type='ready') {
+    document.getElementById('statusText').textContent = text;
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot';
+    if (type === 'listening') dot.classList.add('listening');
+    if (type === 'processing') dot.classList.add('processing');
+  }
+
+  function setTTS(val) {
+    ttsEnabled = val;
+    document.getElementById('ttsOn').classList.toggle('active', val);
+    document.getElementById('ttsOff').classList.toggle('active', !val);
+    document.getElementById('ttsOn').setAttribute('aria-pressed', val);
+    document.getElementById('ttsOff').setAttribute('aria-pressed', !val);
+    announce(val ? 'Voice output enabled' : 'Voice output disabled');
+  }
+
+  function updateSpeed(val) {
+    ttsRate = parseFloat(val);
+    document.getElementById('speedDisplay').textContent = parseFloat(val).toFixed(1) + 'x';
+  }
+
+  function speak(text, delay=400) {
+    if (!ttsEnabled || !text) return;
+    window.speechSynthesis.cancel();
+    // FIX: Chrome silently drops speechSynthesis calls made immediately
+    // after SpeechRecognition ends. A short delay lets the audio pipeline
+    // switch from input → output mode before we try to speak.
+    setTimeout(() => {
+      const utt = new SpeechSynthesisUtterance(text);
+      utt.lang = 'en-US';
+      utt.rate = ttsRate; utt.pitch = 1; utt.volume = 1;
+
+      // Pick a natural voice if available (improves clarity for VI users)
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v =>
+        v.lang.startsWith('en') && (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha'))
+      );
+      if (preferred) utt.voice = preferred;
+
+      window.speechSynthesis.speak(utt);
+    }, delay);
+  }
+
+  // Preload voices (Chrome loads them async on first call)
+  window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+
+  function replayLast() {
+    if (lastResponse) { speak(lastResponse); announce('Replaying last response'); }
+    else announce('No response to replay yet');
+  }
+
+  function showResponse(text, intent, confidence, imageB64) {
+    lastResponse = text;
+    const box = document.getElementById('responseBox');
+    document.getElementById('responseText').textContent = text;
+    box.classList.add('has-response');
+    const badge = document.getElementById('intentBadge');
+    if (intent) {
+      badge.style.display = 'inline-flex';
+      document.getElementById('intentText').textContent =
+        intent.replace('_',' ') + (confidence ? ' — ' + Math.round(confidence*100) + '%' : '');
+    }
+    // Show webcam snapshot if returned
+    const preview = document.getElementById('cameraPreview');
+    const webcamImg = document.getElementById('webcamImg');
+    if (imageB64) {
+      webcamImg.src = 'data:image/jpeg;base64,' + imageB64;
+      preview.style.display = 'block';
+      webcamImg.alt = 'Webcam capture: ' + text;
+    } else {
+      preview.style.display = 'none';
+    }
+    speak(text);
+    announce(text, 'assertive');
+    addToHistory(document.getElementById('textInput').value || '(voice)', text);
+  }
+
+  function addToHistory(q, a) {
+    msgCount++;
+    document.getElementById('msgCount').textContent = msgCount + ' message' + (msgCount!==1?'s':'');
+    history.unshift({q, a});
+    if (history.length > 10) history.pop();
+    document.getElementById('historyList').innerHTML = history.map((item, i) => `
+      <div class="history-item" tabindex="0"
+           onclick="replayItem(${i})" onkeydown="if(event.key==='Enter')replayItem(${i})"
+           role="button" aria-label="Replay: ${item.a.substring(0,60)}">
+        <div class="history-q">You: ${item.q}</div>
+        <div class="history-a">${item.a}</div>
+      </div>`).join('');
+  }
+
+  function replayItem(i) { if(history[i]){ speak(history[i].a); announce('Replaying: '+history[i].a,'assertive'); } }
+
+  async function processInput(text) {
+    if (!text.trim()) return;
+    setStatus('Processing: ' + text, 'processing');
+    try {
+      const res = await fetch('/process', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({text})
+      });
+      const data = await res.json();
+      if (data.error) {
+        setStatus('Error occurred','ready');
+        showResponse('Sorry, an error occurred: '+data.error, 'error', null, null);
+      } else {
+        setStatus('Ready — '+data.intent.replace('_',' ')+' detected','ready');
+        showResponse(data.response, data.intent, data.confidence, data.image || null);
+      }
+    } catch(err) {
+      setStatus('Backend not connected','ready');
+      showResponse('Cannot connect to backend. Make sure app.py is running on port 5000.','error',null,null);
+    }
+  }
+
+  async function sendText() {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) { announce('Please type a message first'); return; }
+    document.getElementById('textInput').value = '';
+    await processInput(text);
+  }
+
+  async function sendCommand(cmd) {
+    announce('Sending: ' + cmd);
+    await processInput(cmd);
+  }
+
+  function toggleMic() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      const msg = 'Voice input not supported. Please use Google Chrome.';
+      document.getElementById('voiceStatus').textContent = msg;
+      document.getElementById('voiceStatus').className = 'voice-status error';
+      announce(msg, 'assertive'); return;
+    }
+    isListening ? stopListening() : startListening();
+  }
+
+  function startListening() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SR();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = false; // We handle continuity ourselves (more reliable)
+
+    let accumulatedText = ''; // builds up the full transcript across restarts
+    let silenceTimer = null;
+
+    recognition.onstart = () => {
+      isListening = true;
+      document.getElementById('micBtn').classList.add('listening');
+      document.getElementById('micBtn').setAttribute('aria-pressed','true');
+      document.getElementById('micLabel').textContent = 'Listening...';
+      document.getElementById('voiceStatus').textContent = 'Listening — speak your command now';
+      document.getElementById('voiceStatus').className = 'voice-status listening';
+      setStatus('Listening — speak now','listening');
+      announce('Listening. Speak your command now.','assertive');
+    };
+
+    recognition.onresult = (e) => {
+      // Collect all results (interim + final) into one string
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+
+      // Show live transcript so user can see what was captured
+      document.getElementById('textInput').value = accumulatedText + transcript;
+      document.getElementById('voiceStatus').textContent = 'Heard: ' + (accumulatedText + transcript);
+
+      // If this result is marked final, lock it into accumulatedText
+      if (e.results[e.results.length - 1].isFinal) {
+        accumulatedText += transcript + ' ';
+        document.getElementById('textInput').value = accumulatedText.trim();
+      }
+
+      // Reset the silence timer — user is still speaking
+      clearTimeout(silenceTimer);
+      // FIX: wait 2.5s of silence after last word before auto-submitting
+      silenceTimer = setTimeout(() => {
+        if (isListening) stopListening();
+      }, 2500);
+    };
+
+    recognition.onend = () => {
+      // FIX: if still listening (user hasn't clicked stop), restart automatically
+      // This prevents Chrome's ~2s hard stop from cutting the user off
+      if (isListening) {
+        try { recognition.start(); } catch(e) { /* already stopping */ }
+        return;
+      }
+
+      // User clicked stop (or silence timeout fired) — process what we got
+      clearTimeout(silenceTimer);
+      document.getElementById('micBtn').classList.remove('listening');
+      document.getElementById('micBtn').setAttribute('aria-pressed','false');
+      document.getElementById('micLabel').textContent = 'Tap to Speak';
+      document.getElementById('voiceStatus').className = 'voice-status';
+
+      const finalText = (accumulatedText + (document.getElementById('textInput').value || '')).trim();
+      document.getElementById('textInput').value = '';
+      accumulatedText = '';
+
+      if (finalText) {
+        document.getElementById('voiceStatus').textContent = 'Processing: ' + finalText;
+        processInput(finalText);
+      } else {
+        setStatus('Ready','ready');
+        document.getElementById('voiceStatus').textContent = 'No speech detected. Try again.';
+        document.getElementById('voiceStatus').className = 'voice-status error';
+        announce('No speech detected. Please try again.','assertive');
+      }
+    };
+
+    recognition.onerror = (e) => {
+      // 'no-speech' is normal during pauses — just restart, don't treat as error
+      if (e.error === 'no-speech' && isListening) {
+        try { recognition.start(); } catch(err) { /* already restarting */ }
+        return;
+      }
+      isListening = false;
+      clearTimeout(silenceTimer);
+      document.getElementById('micBtn').classList.remove('listening');
+      document.getElementById('micBtn').setAttribute('aria-pressed','false');
+      document.getElementById('micLabel').textContent = 'Tap to Speak';
+      const msg = 'Voice error: ' + e.error + '. Try again.';
+      document.getElementById('voiceStatus').textContent = msg;
+      document.getElementById('voiceStatus').className = 'voice-status error';
+      setStatus('Ready','ready'); announce(msg,'assertive');
+    };
+
+    recognition.start();
+  }
+
+  function stopListening() {
+    isListening = false; // must be set BEFORE .stop() so onend doesn't auto-restart
+    if (recognition) recognition.stop();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code==='Space' && document.activeElement.tagName!=='INPUT') { e.preventDefault(); toggleMic(); }
+  });
+  document.getElementById('textInput').addEventListener('keydown', e => { if(e.key==='Enter') sendText(); });
+
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const greeting = 'Voice Cognitive Agent is ready. Press Space or tap the microphone to speak. Or type your command in the text box.';
+      speak(greeting); announce(greeting);
+    }, 800);
+  });
+</script>
+</body>
+</html>

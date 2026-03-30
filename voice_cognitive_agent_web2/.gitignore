@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Model weights (too large for GitHub — >25MB limit)
+models/*.weights
+models/*.caffemodel
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs & temp
+*.log
+*.tmp
+outputs/
